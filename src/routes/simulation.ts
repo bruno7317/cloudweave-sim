@@ -6,10 +6,13 @@ const router = Router()
 
 function performTurn(countries: Country[], market: Market): void {
     market.matchOffers()
+    const base_price = market.getBasePrice([...countries]);
     for (const country of countries) {
         country.produce()
         country.consume()
-        const offer = country.strategizeTrade(market.getAvailableOffers());
+        const offer = country.strategizeTrade(
+            market.getAvailableOffers(), 
+            base_price);
         if (offer) {
             market.addOffer(offer);
         }

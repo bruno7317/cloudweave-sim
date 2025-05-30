@@ -15,6 +15,14 @@ class Market {
     }
 
     addOffer(offer: TradeOffer): void {
+        if (offer.quantity <= 0) {
+            logger.warn(`[MARKET] Rejected offer from ${offer.authorName}: quantity must be > 0`);
+            return;
+        }
+        if (offer.unit_price <= 0) {
+            logger.warn(`[MARKET] Rejected offer from ${offer.authorName}: price must be > 0`);
+            return;
+        }
         this._offers.push(offer);
         logger.debug(`[MARKET] New ${offer.type} offer added by ${offer.authorName}`);
     }
