@@ -1,8 +1,22 @@
 import { Router } from 'express'
 import Country from '../models/Country'
 import TradeType from '../models/TradeType'
+import Market from '../models/Market'
 
 const router = Router()
+
+function performTurn(countries: Country[], market: Market): void {
+    for (const country of countries) {
+        country.produce()
+        country.consume()
+        const offer = country.strategizeTrade();
+        if (offer) {
+            market.addOffer(offer);
+        }
+    }
+}
+
+const market = new Market({})
 
 const canada = new Country({
     name: 'Canada',
@@ -21,20 +35,10 @@ const usa = new Country({
 })
 
 router.get('/', async (req, res) => {
-    const sell_offer = canada.createTradeOffer({
-        trade_type: TradeType.Sell,
-        quantity: 10,
-        unit_price: 2
-    })
 
-    sell_offer.accept(usa)
+    performTurn([canada, usa], market)
 
-    sell_offer.process()
-
-    res.send(`
-        Canada: ${JSON.stringify(canada)},
-        USA: ${JSON.stringify(usa)}
-    `)
+    res.send(`${JSON.stringify(canada)}, ${JSON.stringify(usa)}`)
 })
 
 router.get('/consume', async (req,res) => {

@@ -1,4 +1,5 @@
 import logger from "../logger";
+import Market from "./Market";
 import TradeOffer, { TradeOfferOptions } from "./TradeOffer";
 import TradeType from "./TradeType";
 
@@ -76,23 +77,38 @@ class Country {
         }
     }
 
-    strategizeTrade(): void {
-        const demand = this.consumption_rate - this.production_rate
-        if (this.stockpile > (demand*2) && this.money_reserves < 100) {
-            this.createTradeOffer({
+    strategizeTrade(): TradeOffer | null {
+        const demand = this.consumption_rate - this.production_rate;
+        let offer: TradeOffer | null = null;
+
+        logger.debug(`[STRATEGY] ${this.name} is evaluating trade strategy...`);
+        logger.debug(`[STRATEGY] Demand: ${demand}, Stockpile: ${this.stockpile}, Money Reserves: ${this.money_reserves}`);
+
+        if (this.stockpile > (demand * 2)) {
+            logger.debug(`[THOUGHT] ${this.name} thinks: "I've got plenty of oil. Let's sell some."`);
+            offer = this.createTradeOffer({
                 trade_type: TradeType.Sell,
                 quantity: 5,
                 unit_price: 4
-            })
+            });
         }
-        if (this.stockpile < demand ) {
-            this.createTradeOffer({
+
+        if (this.stockpile < demand) {
+            logger.debug(`[THOUGHT] ${this.name} thinks: "I'm running low on oil. Let's buy some."`);
+            offer = this.createTradeOffer({
                 trade_type: TradeType.Buy,
                 quantity: demand,
                 unit_price: 5
-            })
+            });
         }
+
+        if (!offer) {
+            logger.debug(`[THOUGHT] ${this.name} decides to hold off on trading this turn.`);
+        }
+
+        return offer;
     }
+
 }
 
 export default Country;

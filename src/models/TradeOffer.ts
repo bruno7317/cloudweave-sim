@@ -30,6 +30,22 @@ class TradeOffer {
         }
     }
 
+    get offerType(): TradeType {
+        return this.type
+    }
+
+    get buyerName(): string | undefined {
+        return this.buyer?.name
+    }
+
+    get sellerName(): string | undefined {
+        return this.seller?.name
+    }
+
+    get authorName(): string {
+        return this.buyer?.name ?? this.seller?.name ?? "Unknown";
+    }
+
     accept(counterparty: Country): void {
         if (this.type === TradeType.Buy) {
             this.seller = counterparty;
