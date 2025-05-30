@@ -89,35 +89,74 @@ class Country {
         }
     }
 
-    strategizeTrade(currentOffers: TradeOffer[]): TradeOffer | null {
-        const demand = this._consumption_rate - this._production_rate;
-        let offer: TradeOffer | null = null;
+    strategizeTrade(availableOffers: TradeOffer[]): TradeOffer | null {
+        logger.debug(`[STRATEGY] ${this.name} is evaluating trade strategy...`);
+        logger.debug(`[STRATEGY] 
+            Stockpile: ${this.stockpile}, 
+            Consumption Rate: ${this._consumption_rate}, 
+            Money Reserves: ${this.money_reserves}
+        `);
 
-        logger.debug(`[STRATEGY] ${this._name} is evaluating trade strategy...`);
-        logger.debug(`[STRATEGY] Demand: ${demand}, Stockpile: ${this._stockpile}, Money Reserves: ${this._money_reserves}`);
+        const buyOffers = availableOffers
+            .filter(o => o.type === TradeType.Sell)
+            .sort((a, b) => a.unit_price - b.unit_price); // lowest price first
 
-        if (this._stockpile > (demand * 2)) {
-            logger.debug(`[THOUGHT] ${this._name} thinks: "I've got plenty of oil. Let's sell some."`);
-            offer = this.createTradeOffer({
-                trade_type: TradeType.Sell,
-                quantity: 5,
-                unit_price: 4
-            });
+        const sellOffers = availableOffers
+            .filter(o => o.type === TradeType.Buy)
+            .sort((a, b) => b.unit_price - a.unit_price); // highest price first
+
+        const hasDeficit = this.stockpile < this._consumption_rate;
+        const hasSurplus = this.stockpile > (this._consumption_rate * 2);
+        const MIN_SELL_PRICE = 4;
+        let offer = null;
+
+        if (hasDeficit) {
+            const needed = this._consumption_rate - this.stockpile;
+            logger.debug(`[THOUGHT] ${this.name} thinks: "I can't risk running out of oil. I need at least ${needed} units."`);
+
+            const cheapestOffer = buyOffers[0];
+            if (cheapestOffer) {
+                const maxAffordableQty = Math.floor(this.money_reserves / cheapestOffer.unit_price);
+                const quantity = Math.min(needed, maxAffordableQty);
+
+                if (quantity > 0) {
+                    logger.debug(`[DECISION] ${this.name} will BUY ${quantity} units @ $${cheapestOffer.unit_price}`);
+                    offer = this.createTradeOffer({
+                        trade_type: TradeType.Buy,
+                        quantity,
+                        unit_price: cheapestOffer.unit_price + 1 // bid slightly higher to compete
+                    });
+                } else {
+                    logger.debug(`[DECISION] ${this.name} can't afford to buy oil right now.`);
+                }
+            } else {
+                logger.debug(`[DECISION] ${this.name} sees no oil for sale, but needs it. Will place a buy offer anyway.`);
+                offer = this.createTradeOffer({
+                    trade_type: TradeType.Buy,
+                    quantity: needed,
+                    unit_price: 6 // arbitrary high price to attract sellers
+                });
+            }
         }
 
-        if (this._stockpile < demand) {
-            logger.debug(`[THOUGHT] ${this._name} thinks: "I'm running low on oil. Let's buy some."`);
-            offer = this.createTradeOffer({
-                trade_type: TradeType.Buy,
-                quantity: demand,
-                unit_price: 5
-            });
+        if (hasSurplus) {
+            const bestBuyer = sellOffers[0];
+            if (bestBuyer && bestBuyer.unit_price >= MIN_SELL_PRICE) {
+                const quantity = Math.min(5, this.stockpile - this._consumption_rate); // keep enough for own needs
+                logger.debug(`[DECISION] ${this.name} will SELL ${quantity} units @ $${bestBuyer.unit_price}`);
+                offer = this.createTradeOffer({
+                    trade_type: TradeType.Sell,
+                    quantity,
+                    unit_price: bestBuyer.unit_price - 1 // slightly undercut to win
+                });
+            } else {
+                logger.debug(`[THOUGHT] ${this.name} has surplus but no good buy offers. Holding off for now.`);
+            }
         }
 
         if (!offer) {
-            logger.debug(`[THOUGHT] ${this._name} decides to hold off on trading this turn.`);
+            logger.debug(`[DECISION] ${this.name} chooses not to trade this turn.`);
         }
-
         return offer;
     }
 
