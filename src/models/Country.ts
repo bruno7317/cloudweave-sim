@@ -12,80 +12,92 @@ interface CountryOptions {
 }
 
 class Country {
-    public name: string
-    private stockpile: number
-    private money_reserves: number
-    private production_rate: number
-    private consumption_rate: number
+    private _name: string
+    private _stockpile: number
+    private _money_reserves: number
+    private _production_rate: number
+    private _consumption_rate: number
 
     constructor(options: CountryOptions) {
-        this.name = options.name;
-        this.stockpile = options.stockpile;
-        this.money_reserves = options.money_reserves;
-        this.production_rate = options.production_rate;
-        this.consumption_rate = options.consumption_rate;
+        this._name = options.name;
+        this._stockpile = options.stockpile;
+        this._money_reserves = options.money_reserves;
+        this._production_rate = options.production_rate;
+        this._consumption_rate = options.consumption_rate;
+    }
+
+    get stockpile(): number {
+        return this._stockpile
+    }
+
+    get money_reserves(): number {
+        return this._money_reserves
+    }
+
+    get name(): string {
+        return this._name
     }
 
     produce(): void {
-        this.stockpile += this.production_rate;
-        logger.info(`[PRODUCE] ${this.name} produced ${this.production_rate} units (stockpile: ${this.stockpile})`);
+        this._stockpile += this._production_rate;
+        logger.info(`[PRODUCE] ${this._name} produced ${this._production_rate} units (stockpile: ${this._stockpile})`);
     }
 
     consume(): void {
-        this.stockpile -= this.consumption_rate;
-        logger.info(`[CONSUME] ${this.name} consumed ${this.consumption_rate} units (stockpile: ${this.stockpile})`);
+        this._stockpile -= this._consumption_rate;
+        logger.info(`[CONSUME] ${this._name} consumed ${this._consumption_rate} units (stockpile: ${this._stockpile})`);
     }
 
     createTradeOffer(options: Omit<TradeOfferOptions, 'author'>): TradeOffer {
-        logger.debug(`[TRADE_OFFER] ${this.name} wants to ${options.trade_type} ${options.quantity} units @ ${options.unit_price}`);
+        logger.debug(`[TRADE_OFFER] ${this._name} wants to ${options.trade_type} ${options.quantity} units @ ${options.unit_price}`);
         return new TradeOffer({ ...options, author: this });
     }
 
     depositResource(quantity: number): void {
         if (quantity > 0) {
-            this.stockpile += quantity;
-            logger.debug(`[RESOURCE_DEPOSIT] ${this.name} received ${quantity} units (stockpile: ${this.stockpile})`);
+            this._stockpile += quantity;
+            logger.debug(`[RESOURCE_DEPOSIT] ${this._name} received ${quantity} units (stockpile: ${this._stockpile})`);
         } else {
             throw new Error(`A deposit of ${quantity} resources can't be made.`);
         }
     }
 
     withdrawResource(quantity: number): void {
-        if (this.stockpile >= quantity) {
-            this.stockpile -= quantity;
-            logger.debug(`[RESOURCE_WITHDRAW] ${this.name} sent ${quantity} units (stockpile: ${this.stockpile})`);
+        if (this._stockpile >= quantity) {
+            this._stockpile -= quantity;
+            logger.debug(`[RESOURCE_WITHDRAW] ${this._name} sent ${quantity} units (stockpile: ${this._stockpile})`);
         } else {
-            throw new Error(`${this.name} doesn't have ${quantity} resources to withdraw.`);
+            throw new Error(`${this._name} doesn't have ${quantity} resources to withdraw.`);
         }
     }
 
     depositMoney(quantity: number): void {
         if (quantity > 0) {
-            this.money_reserves += quantity;
-            logger.debug(`[MONEY_DEPOSIT] ${this.name} received $${quantity} (reserves: ${this.money_reserves})`);
+            this._money_reserves += quantity;
+            logger.debug(`[MONEY_DEPOSIT] ${this._name} received $${quantity} (reserves: ${this._money_reserves})`);
         } else {
             throw new Error(`A deposit of ${quantity} money can't be made.`);
         }
     }
 
     withdrawMoney(quantity: number): void {
-        if (this.money_reserves >= quantity) {
-            this.money_reserves -= quantity;
-            logger.debug(`[MONEY_WITHDRAW] ${this.name} paid $${quantity} (reserves: ${this.money_reserves})`);
+        if (this._money_reserves >= quantity) {
+            this._money_reserves -= quantity;
+            logger.debug(`[MONEY_WITHDRAW] ${this._name} paid $${quantity} (reserves: ${this._money_reserves})`);
         } else {
-            throw new Error(`${this.name} doesn't have ${quantity} money to withdraw.`);
+            throw new Error(`${this._name} doesn't have ${quantity} money to withdraw.`);
         }
     }
 
-    strategizeTrade(): TradeOffer | null {
-        const demand = this.consumption_rate - this.production_rate;
+    strategizeTrade(currentOffers: TradeOffer[]): TradeOffer | null {
+        const demand = this._consumption_rate - this._production_rate;
         let offer: TradeOffer | null = null;
 
-        logger.debug(`[STRATEGY] ${this.name} is evaluating trade strategy...`);
-        logger.debug(`[STRATEGY] Demand: ${demand}, Stockpile: ${this.stockpile}, Money Reserves: ${this.money_reserves}`);
+        logger.debug(`[STRATEGY] ${this._name} is evaluating trade strategy...`);
+        logger.debug(`[STRATEGY] Demand: ${demand}, Stockpile: ${this._stockpile}, Money Reserves: ${this._money_reserves}`);
 
-        if (this.stockpile > (demand * 2)) {
-            logger.debug(`[THOUGHT] ${this.name} thinks: "I've got plenty of oil. Let's sell some."`);
+        if (this._stockpile > (demand * 2)) {
+            logger.debug(`[THOUGHT] ${this._name} thinks: "I've got plenty of oil. Let's sell some."`);
             offer = this.createTradeOffer({
                 trade_type: TradeType.Sell,
                 quantity: 5,
@@ -93,8 +105,8 @@ class Country {
             });
         }
 
-        if (this.stockpile < demand) {
-            logger.debug(`[THOUGHT] ${this.name} thinks: "I'm running low on oil. Let's buy some."`);
+        if (this._stockpile < demand) {
+            logger.debug(`[THOUGHT] ${this._name} thinks: "I'm running low on oil. Let's buy some."`);
             offer = this.createTradeOffer({
                 trade_type: TradeType.Buy,
                 quantity: demand,
@@ -103,7 +115,7 @@ class Country {
         }
 
         if (!offer) {
-            logger.debug(`[THOUGHT] ${this.name} decides to hold off on trading this turn.`);
+            logger.debug(`[THOUGHT] ${this._name} decides to hold off on trading this turn.`);
         }
 
         return offer;

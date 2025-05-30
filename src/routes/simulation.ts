@@ -1,15 +1,15 @@
 import { Router } from 'express'
 import Country from '../models/Country'
-import TradeType from '../models/TradeType'
 import Market from '../models/Market'
 
 const router = Router()
 
 function performTurn(countries: Country[], market: Market): void {
+    market.matchOffers()
     for (const country of countries) {
         country.produce()
         country.consume()
-        const offer = country.strategizeTrade();
+        const offer = country.strategizeTrade(market.getAvailableOffers());
         if (offer) {
             market.addOffer(offer);
         }
