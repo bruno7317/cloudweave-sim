@@ -17,6 +17,7 @@ class Country {
     private _money_reserves: number
     private _production_rate: number
     private _consumption_rate: number
+    private _instabilityScore = 0
 
     constructor(options: CountryOptions) {
         this._name = options.name;
@@ -38,24 +39,24 @@ class Country {
         return this._name
     }
 
-    get projectedResourceBalance(): number {
-        return this._stockpile + this._production_rate - this._consumption_rate;
+    get resourceBalance(): number {
+        return this._stockpile - this._consumption_rate;
     }
 
     get hasSurplus(): boolean {
-        return this.projectedResourceBalance > 0;
+        return this.resourceBalance > 0;
     }
 
     get hasDeficit(): boolean {
-        return this.projectedResourceBalance < 0;
+        return this.resourceBalance < 0;
     }
 
     get resourceSurplus(): number {
-        return Math.max(0, this.projectedResourceBalance);
+        return Math.max(0, this.resourceBalance);
     }
 
     get resourceDemand(): number {
-        return Math.max(0, -this.projectedResourceBalance);
+        return Math.max(0, -this.resourceBalance);
     }
 
     produce(): void {
@@ -66,11 +67,15 @@ class Country {
     consume(): void {
         this._stockpile -= this._consumption_rate;
         logger.info(`[CONSUME] ${this._name} consumed ${this._consumption_rate} units (stockpile: ${this._stockpile})`);
+        if (this._stockpile < 0) {
+            this._instabilityScore += 1;
+            this._stockpile = 0;
+            logger.warn(`[INSTABILITY] ${this._name} failed to meet oil demand. Instability score is now ${this._instabilityScore}.`);
+        }
     }
 
     createTradeOffer(options: Omit<TradeOfferOptions, 'author'>): TradeOffer {
-        logger.debug(`[TRADE_OFFER] ${this._name} wants to ${options.trade_type} ${options.quantity} units @ ${options.unit_price}`);
-        return new TradeOffer({ ...options, author: this });
+        return new TradeOffer({ ...options, author: this._name });
     }
 
     depositResource(quantity: number): void {
@@ -101,12 +106,9 @@ class Country {
     }
 
     withdrawMoney(quantity: number): void {
-        if (this._money_reserves >= quantity) {
-            this._money_reserves -= quantity;
-            logger.debug(`[MONEY_WITHDRAW] ${this._name} paid $${quantity} (reserves: ${this._money_reserves})`);
-        } else {
-            throw new Error(`${this._name} doesn't have ${quantity} money to withdraw.`);
-        }
+        this._money_reserves -= quantity;
+
+        logger.debug(`[MONEY_WITHDRAW] ${this._name} paid $${quantity} (reserves: ${this._money_reserves})`);
     }
 
     assessMarket(availableOffers: TradeOffer[]): { sellerListings: TradeOffer[], buyerListings: TradeOffer[] } {
@@ -121,8 +123,9 @@ class Country {
         return { sellerListings, buyerListings }
     }
 
-    createCompetitiveBuyOffer(base_price: number, cheapestOffer: TradeOffer): TradeOffer | null {
-        const maxAffordableQty = Math.floor(this.money_reserves / base_price);
+    createCompetitiveBuyOffer(base_price: number): TradeOffer | null {
+        const targetPrice = base_price + 1
+        const maxAffordableQty = Math.floor(this.money_reserves / targetPrice);
         const quantity = Math.min(this.resourceDemand, maxAffordableQty);
 
         if (quantity <= 0) {
@@ -130,11 +133,11 @@ class Country {
             return null
         }
 
-        logger.debug(`[DECISION] ${this.name} will BUY ${quantity} units @ $${cheapestOffer.unit_price}`);
+        logger.debug(`[DECISION] ${this.name} will BUY ${quantity} units @ $${targetPrice}`);
         return this.createTradeOffer({
             trade_type: TradeType.Buy,
             quantity,
-            unit_price: cheapestOffer.unit_price + 1 // bid slightly higher to compete
+            unit_price: targetPrice
         });
     }
 
@@ -147,14 +150,26 @@ class Country {
         });
     }
 
-    decideBuyAction(sellerListings: TradeOffer[], base_price: number): TradeOffer | null {
-        logger.debug(`[THOUGHT] ${this.name} thinks: "I can't risk running out of oil. I need at least ${this.resourceDemand} units."`);
-        const cheapestOffer = sellerListings[0];
-        if (!cheapestOffer) {
-            return this.createFallbackBuyOffer(base_price)
-        }
+    fulfillFromMarket(sellerListings: TradeOffer[]): void {
+        for (const sellOffer of sellerListings) {
+            if (!this.hasDeficit) break;
 
-        return this.createCompetitiveBuyOffer(base_price, cheapestOffer)
+            sellOffer.accept(this._name);
+        }
+    }
+
+    decideBuyAction(sellerListings: TradeOffer[], base_price: number): TradeOffer | null {
+        logger.debug(`[THOUGHT] ${this.name} needs ${this.resourceDemand} units.`);
+
+        this.fulfillFromMarket(sellerListings)
+
+        if (this.hasDeficit) {
+            logger.debug(`[DECISION] ${this.name} couldn't satisfy its needs from existing SELL offers. Placing a BUY offer.`);
+            return this.createCompetitiveBuyOffer(base_price)
+        }
+        
+        logger.debug(`[DECISION] ${this.name} decides not to post BUY offers.`);
+        return null;
     }
 
     createFallbackSellOffer(base_price: number): TradeOffer {
@@ -166,9 +181,9 @@ class Country {
         });
     }
 
-    createCompetitiveSellOffer(base_price: number, bestBuyer: TradeOffer): TradeOffer {
+    createCompetitiveSellOffer(base_price: number): TradeOffer {
+        const targetPrice = base_price - 1;
         const quantity = this.resourceSurplus;
-        const targetPrice = Math.max(base_price, bestBuyer.unit_price - 1);
         logger.debug(`[DECISION] ${this.name} will SELL ${quantity} units @ $${targetPrice}`);
 
         return this.createTradeOffer({
@@ -178,33 +193,44 @@ class Country {
         });
     }
 
-    decideSellAction(buyerListings: TradeOffer[], base_price: number): TradeOffer | null {
-        const bestBuyer = buyerListings[0];
-        if (!bestBuyer) {
-            return this.createFallbackSellOffer(base_price);
-        }
+    fulfillMarketDemand(buyerListings: TradeOffer[]): void {
+        for(const buyOffer of buyerListings) {
+            if (!this.hasSurplus) break;
 
-        return this.createCompetitiveSellOffer(base_price, bestBuyer)
+            buyOffer.accept(this._name);
+        }
     }
 
-    strategizeTrade(availableOffers: TradeOffer[], base_price: number): TradeOffer | null {
+    decideSellAction(buyerListings: TradeOffer[], base_price: number): TradeOffer | null {
+        logger.debug(`[THOUGHT] ${this.name} has a surplus of ${this.resourceSurplus} units.`);
+        
+        this.fulfillMarketDemand(buyerListings);
+
+        if (this.hasSurplus) {
+            const bestBuyer = buyerListings[0];
+            logger.debug(`[DECISION] ${this.name} has oil to sell but there are no BUY offers. Placing a SELL offer.`);
+            return this.createCompetitiveSellOffer(base_price)
+        }
+        
+        logger.debug(`[DECISION] ${this.name} decides not to post SELL offers.`);
+        return null;
+    }
+
+    strategizeTrade(availableOffers: TradeOffer[], base_price: number): TradeOffer[] {
         logger.debug(`[STRATEGY] ${this.name} is evaluating trade strategy...`);
-        logger.debug(`[STRATEGY] 
-            Stockpile: ${this._stockpile}, 
-            Consumption Rate: ${this._consumption_rate}, 
-            Money Reserves: ${this._money_reserves}
-        `);
+        logger.debug(`[STRATEGY] Stockpile: ${this._stockpile}, Consumption Rate: ${this._consumption_rate}, Money Reserves: ${this._money_reserves}`);
         
         const { sellerListings, buyerListings } = this.assessMarket(availableOffers)
 
-        if (this.hasDeficit) {
-            return this.decideBuyAction(sellerListings, base_price)
-        } else if (this.hasSurplus) {
-            return this.decideSellAction(buyerListings, base_price)
-        } else {
-            logger.debug(`[DECISION] ${this.name} chooses not to trade this turn.`);
-            return null;
-        }    
+        const offers: TradeOffer[] = [];
+
+        const buyOffer = this.decideBuyAction(sellerListings, base_price)
+        if (buyOffer) offers.push(buyOffer);
+
+        const sellOffer = this.decideSellAction(buyerListings, base_price)
+        if (sellOffer) offers.push(sellOffer);
+
+        return offers;
     }
 
 }

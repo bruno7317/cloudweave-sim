@@ -1,23 +1,9 @@
 import { Router } from 'express'
 import Country from '../models/Country'
 import Market from '../models/Market'
+import TurnManager from '../models/TurnManager'
 
 const router = Router()
-
-function performTurn(countries: Country[], market: Market): void {
-    market.matchOffers()
-    const base_price = market.getBasePrice([...countries]);
-    for (const country of countries) {
-        country.produce()
-        country.consume()
-        const offer = country.strategizeTrade(
-            market.getAvailableOffers(), 
-            base_price);
-        if (offer) {
-            market.addOffer(offer);
-        }
-    }
-}
 
 const market = new Market({})
 
@@ -36,22 +22,13 @@ const usa = new Country({
     production_rate: 1,
     consumption_rate: 4
 })
+const turnManager = new TurnManager([canada, usa], market)
 
 router.get('/', async (req, res) => {
 
-    performTurn([canada, usa], market)
+    turnManager.performTurn()
 
-    res.send(`${JSON.stringify(canada)}, ${JSON.stringify(usa)}`)
-})
-
-router.get('/consume', async (req,res) => {
-    canada.consume()
-    res.send(`${JSON.stringify(canada)}`)
-})
-
-router.get('/produce', async (req,res) => {
-    canada.produce()
-    res.send(`${JSON.stringify(canada)}`)
+    res.send(JSON.stringify(market.offers, null, 2))
 })
 
 module.exports = router
