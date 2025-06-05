@@ -9,7 +9,7 @@ const market = new Market({})
 
 const canada = new Country({
     name: 'Canada',
-    stockpile: 10,
+    stockpile: 2,
     money_reserves: 100,
     production_rate: 3,
     consumption_rate: 1
@@ -20,7 +20,7 @@ const usa = new Country({
     stockpile: 2,
     money_reserves: 100,
     production_rate: 1,
-    consumption_rate: 4
+    consumption_rate: 3
 })
 const turnManager = new TurnManager([canada, usa], market)
 

@@ -62,6 +62,11 @@ class Market {
             logger.debug(`[MARKET] Removed ${removed} expired offers.`)
         }
     }
+
+    removeOffers(offers: TradeOffer[]): void {
+        const idsToRemove = new Set(offers.map(o => o.id));
+        this._offers = this._offers.filter(o => !idsToRemove.has(o.id));
+    }
 }
 
 export default Market;

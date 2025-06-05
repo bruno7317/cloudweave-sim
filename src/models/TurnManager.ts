@@ -1,6 +1,7 @@
 import logger from "../logger";
 import Country from "./Country";
 import Market from "./Market";
+import TradeOffer from "./TradeOffer";
 
 class TurnManager {
     private _turn = 0;
@@ -20,20 +21,21 @@ class TurnManager {
         return found;
     }
 
-    processTrades(): void {
-        const settledOffers = this.market.offers.filter(o => o.isReadyToProcess);
-        
-        for (const offer of settledOffers) {
-            const seller = this.getCountry(offer.seller!);
-            const buyer = this.getCountry(offer.buyer!);
-    
-            logger.info(`[TRADE_PROCESS] ${buyer.name} buys ${offer.quantity} units @ ${offer.unit_price} each from ${seller.name} (total: ${offer.totalCost})`);
-    
-            seller.withdrawResource(offer.quantity);
-            buyer.withdrawMoney(offer.totalCost);
-            seller.depositMoney(offer.totalCost);
-            buyer.depositResource(offer.quantity);
+    processTrade(offer: TradeOffer): void {
+        if (!offer.isReadyToProcess()) {
+            logger.error(`[TURN] Trade Offer isn't ready to be processed.`)
+            return;
         }
+        
+        const seller = this.getCountry(offer.seller!);
+        const buyer = this.getCountry(offer.buyer!);
+
+        logger.info(`[TRADE_PROCESS] ${buyer.name} buys ${offer.quantity} units @ ${offer.unit_price} each from ${seller.name} (total: ${offer.totalCost})`);
+
+        seller.withdrawResource(offer.quantity);
+        buyer.withdrawMoney(offer.totalCost);
+        seller.depositMoney(offer.totalCost);
+        buyer.depositResource(offer.quantity);
     }
 
     performTurn(): void {
@@ -49,13 +51,20 @@ class TurnManager {
                 this.market.offers,
                 base_price
             );
+
+            const fulfilled: TradeOffer[] = []
             for (const offer of offers) {
                 offer.createdAt = this._turn;
-                this.market.addOffer(offer);
+                if (offer.isReadyToProcess()) {
+                    this.processTrade(offer);
+                    fulfilled.push(offer)
+                } else {
+                    this.market.addOffer(offer);
+                }
             }
+            this.market.removeOffers(fulfilled);
         }
 
-        this.processTrades();
         logger.debug(`[TURN] End of turn #${this._turn}`)
     }
 }

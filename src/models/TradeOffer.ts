@@ -16,8 +16,12 @@ class TradeOffer {
     public readonly unit_price: number;
     public ttl: number = 3;
     public createdAt?: number;
+    public readonly id: number;
+
+    private static _idCounter = 0;
 
     constructor(options: TradeOfferOptions) {
+        this.id = TradeOffer._idCounter++;
         this.type = options.trade_type;
         this.quantity = options.quantity;
         this.unit_price = options.unit_price;

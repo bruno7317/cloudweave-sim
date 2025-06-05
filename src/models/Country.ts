@@ -150,26 +150,42 @@ class Country {
         });
     }
 
-    fulfillFromMarket(sellerListings: TradeOffer[]): void {
-        for (const sellOffer of sellerListings) {
-            if (!this.hasDeficit) break;
+    fulfillFromMarket(sellerListings: TradeOffer[]): TradeOffer[] {
+        const accepted: TradeOffer[] = [];
+        let quantityNeeded = this.resourceDemand;
 
-            sellOffer.accept(this._name);
+        for (const offer of sellerListings) {
+            if (quantityNeeded <= 0) break;
+
+            if (offer.accept(this._name)) {
+                accepted.push(offer);
+                quantityNeeded -= offer.quantity;
+            }
         }
+        
+        return accepted;
     }
 
-    decideBuyAction(sellerListings: TradeOffer[], base_price: number): TradeOffer | null {
+    decideBuyAction(sellerListings: TradeOffer[], base_price: number): TradeOffer[] {
         logger.debug(`[THOUGHT] ${this.name} needs ${this.resourceDemand} units.`);
 
-        this.fulfillFromMarket(sellerListings)
+        const returnOffers = this.fulfillFromMarket(sellerListings)
+        let receivedAmount = 0;
+        for (const offer of returnOffers) {
+            receivedAmount += offer.quantity;
+        }
 
-        if (this.hasDeficit) {
+        if (receivedAmount < this.resourceDemand) {
             logger.debug(`[DECISION] ${this.name} couldn't satisfy its needs from existing SELL offers. Placing a BUY offer.`);
-            return this.createCompetitiveBuyOffer(base_price)
+            const buyOffer = this.createCompetitiveBuyOffer(base_price)
+            if (buyOffer) {
+                returnOffers.push(buyOffer)
+            }
+            return returnOffers;
         }
         
         logger.debug(`[DECISION] ${this.name} decides not to post BUY offers.`);
-        return null;
+        return returnOffers;
     }
 
     createFallbackSellOffer(base_price: number): TradeOffer {
@@ -224,8 +240,8 @@ class Country {
 
         const offers: TradeOffer[] = [];
 
-        const buyOffer = this.decideBuyAction(sellerListings, base_price)
-        if (buyOffer) offers.push(buyOffer);
+        const buyOffers = this.decideBuyAction(sellerListings, base_price)
+        offers.push(...buyOffers);
 
         const sellOffer = this.decideSellAction(buyerListings, base_price)
         if (sellOffer) offers.push(sellOffer);
