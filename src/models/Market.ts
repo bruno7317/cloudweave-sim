@@ -43,15 +43,32 @@ class Market {
         let totalStockpile = 0;
         let totalMoney = 0;
 
+        logger.debug(`[PRICE_CALC] --- Calculating base price ---`);
         for (const country of countries) {
+            const effectiveMoney = Math.max(country.money_reserves, 0);
+            logger.debug(`[PRICE_CALC] ${country.name}: stockpile=${country.stockpile}, money=${country.money_reserves}, effectiveMoney=${effectiveMoney}`);
             totalStockpile += country.stockpile;
-            totalMoney += country.money_reserves;
+            totalMoney += effectiveMoney;
         }
 
-        const rawPrice = (totalMoney / totalStockpile) * 2;
-        const price = Math.max(rawPrice, 1); // Never drop below $1
+        logger.debug(`[PRICE_CALC] Total stockpile: ${totalStockpile}`);
+        logger.debug(`[PRICE_CALC] Total effective money: ${totalMoney}`);
+        logger.debug(`[PRICE_CALC] Country count: ${countries.length}`);
 
-        return Math.round(price);
+        let rawPrice = 1;
+        if (totalStockpile > 0 && countries.length > 0) {
+            const avgMoneyPerCountry = totalMoney / countries.length;
+            rawPrice = avgMoneyPerCountry / totalStockpile;
+            logger.debug(`[PRICE_CALC] Avg money per country: ${avgMoneyPerCountry.toFixed(2)}`);
+            logger.debug(`[PRICE_CALC] Raw price (before min check): ${rawPrice.toFixed(2)}`);
+        }
+
+        const price = Math.max(rawPrice, 1);
+        const rounded = Math.round(price);
+        logger.debug(`[PRICE_CALC] Final base price (rounded): $${rounded}`);
+        logger.debug(`[PRICE_CALC] -------------------------------`);
+
+        return rounded;
     }
 
     removeExpiredOffers(currentTurn: number): void {

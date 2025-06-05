@@ -38,19 +38,31 @@ class TurnManager {
         buyer.depositResource(offer.quantity);
     }
 
+    countriesProduce(countries: Country[]): void {
+        for (const country of countries) {
+            country.produce();
+        }
+    }
+
+    countriesConsume(countries: Country[]): void {
+        for (const country of countries) {
+            country.consume();
+        }
+    }
+
     performTurn(): void {
         this._turn++;
         logger.debug(`[TURN] Starting turn #${this._turn}`)
         this.market.removeExpiredOffers(this._turn);
         
+        this.countriesProduce(this.countries)
+
+        this.countriesConsume(this.countries)
+
+        const base_price = this.market.getBasePrice([...this.countries]);
+
         for (const country of this.countries) {
-            const base_price = this.market.getBasePrice([...this.countries]);
-            country.produce();
-            country.consume();
-            const offers = country.strategizeTrade(
-                this.market.offers,
-                base_price
-            );
+            const offers = country.strategizeTrade(this.market.offers, base_price);
 
             const fulfilled: TradeOffer[] = []
             for (const offer of offers) {
