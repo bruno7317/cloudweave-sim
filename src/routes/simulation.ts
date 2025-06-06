@@ -1,30 +1,24 @@
 import { Router } from 'express'
-import Country from '../models/Country'
 import Market from '../models/Market'
 import TurnManager from '../models/TurnManager'
+import getCountries from '../services/country'
 
 const router = Router()
 
 const market = new Market({})
 
-const canada = new Country({
-    name: 'Canada',
-    stockpile: 2,
-    money_reserves: 100,
-    production_rate: 3,
-    consumption_rate: 1
-})
+let turnManager: TurnManager;
 
-const usa = new Country({
-    name: 'USA',
-    stockpile: 2,
-    money_reserves: 100,
-    production_rate: 1,
-    consumption_rate: 3
-})
-const turnManager = new TurnManager([canada, usa], market)
+async function init() {
+    const countries = await getCountries();
+    turnManager = new TurnManager([...countries], market)
+}
+
+init();
 
 router.get('/', async (req, res) => {
+
+    if (!turnManager) await init();
 
     turnManager.performTurn()
 
