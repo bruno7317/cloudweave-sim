@@ -1,5 +1,6 @@
 import logger from "../logger";
 import Country from "./Country";
+import { EventInput } from "./EventInput";
 import Market from "./Market";
 import TradeOffer from "./TradeOffer";
 
@@ -21,54 +22,67 @@ class TurnManager {
         return found;
     }
 
-    processTrade(offer: TradeOffer): void {
-        if (!offer.isReadyToProcess()) {
-            logger.error(`[TURN] Trade Offer isn't ready to be processed.`)
-            return;
-        }
-        
+    processTrade(offer: TradeOffer): EventInput {
         const seller = this.getCountry(offer.seller!);
         const buyer = this.getCountry(offer.buyer!);
-
-        logger.info(`[TRADE_PROCESS] ${buyer.name} buys ${offer.quantity} units @ ${offer.unit_price} each from ${seller.name} (total: ${offer.totalCost})`);
 
         seller.withdrawResource(offer.quantity);
         buyer.withdrawMoney(offer.totalCost);
         seller.depositMoney(offer.totalCost);
         buyer.depositResource(offer.quantity);
-    }
-
-    countriesProduce(countries: Country[]): void {
-        for (const country of countries) {
-            country.produce();
+        return {
+            turn: this._turn,
+            actor: buyer.name,
+            action: `buy from ${seller.name}`,
+            resource: offer.resource,
+            quantity: offer.quantity
         }
     }
 
-    countriesConsume(countries: Country[]): void {
+    countriesProduce(countries: Country[]): EventInput[] {
+        const events: EventInput[] = [];
         for (const country of countries) {
-            country.consume();
+            const result = country.produce();
+            events.push({
+                turn: this._turn,
+                actor: country.name,
+                action: 'produce',
+                resource: result.resource,
+                quantity: result.amount
+            })
         }
+        return events
     }
 
-    performTurn(): void {
-        this._turn++;
-        logger.debug(`[TURN] Starting turn #${this._turn}`)
-        this.market.removeExpiredOffers(this._turn);
-        
-        this.countriesProduce(this.countries)
+    countriesConsume(countries: Country[]): EventInput[] {
+        const events: EventInput[] = [];
+        for (const country of countries) {
+            const result = country.consume();
+            events.push({
+                turn: this._turn,
+                actor: country.name,
+                action: 'consume',
+                resource: result.resource,
+                quantity: result.amount
+            })
+        }
+        return events;
+    }
 
-        this.countriesConsume(this.countries)
+    countriesTrade(countries: Country[]): EventInput[] {
+        const events: EventInput[] = [];
 
-        const base_price = this.market.getBasePrice([...this.countries]);
+        const base_price = this.market.getBasePrice([...countries]);
 
-        for (const country of this.countries) {
+        for (const country of countries) {
             const offers = country.strategizeTrade(this.market.offers, base_price);
 
             const fulfilled: TradeOffer[] = []
             for (const offer of offers) {
                 offer.createdAt = this._turn;
                 if (offer.isReadyToProcess()) {
-                    this.processTrade(offer);
+                    const trade_event = this.processTrade(offer);
+                    events.push(trade_event)
                     fulfilled.push(offer)
                 } else {
                     this.market.addOffer(offer);
@@ -77,7 +91,24 @@ class TurnManager {
             this.market.removeOffers(fulfilled);
         }
 
+        return events;
+    }
+
+    performTurn(): EventInput[] {
+        this._turn++;
+        const events: EventInput[] = []
+        logger.debug(`[TURN] Starting turn #${this._turn}`)
+        this.market.removeExpiredOffers(this._turn);
+        
+        events.push(...this.countriesProduce(this.countries))
+
+        events.push(...this.countriesConsume(this.countries))
+
+        events.push(...this.countriesTrade(this.countries))
+
         logger.debug(`[TURN] End of turn #${this._turn}`)
+
+        return events;
     }
 }
 

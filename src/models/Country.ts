@@ -59,18 +59,26 @@ class Country {
         return Math.max(0, -this.resourceBalance);
     }
 
-    produce(): void {
+    produce(): { resource: string, amount: number } {
         this._stockpile += this._production_rate;
         logger.info(`[PRODUCE] ${this._name} produced ${this._production_rate} units (stockpile: ${this._stockpile})`);
+        return {
+            resource: 'oil',
+            amount: this._production_rate
+        }
     }
 
-    consume(): void {
+    consume(): { resource: string, amount: number } {
         this._stockpile -= this._consumption_rate;
         logger.info(`[CONSUME] ${this._name} consumed ${this._consumption_rate} units (stockpile: ${this._stockpile})`);
         if (this._stockpile < 0) {
             this._instabilityScore += 1;
             this._stockpile = 0;
             logger.warn(`[INSTABILITY] ${this._name} failed to meet oil demand. Instability score is now ${this._instabilityScore}.`);
+        }
+        return {
+            resource: 'oil',
+            amount: this._consumption_rate
         }
     }
 

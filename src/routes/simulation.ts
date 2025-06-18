@@ -2,27 +2,49 @@ import { Router } from 'express'
 import Market from '../models/Market'
 import TurnManager from '../models/TurnManager'
 import getCountries from '../services/country'
+import postEvents from '../services/event'
+import logger from '../logger'
 
 const router = Router()
 
 const market = new Market({})
-
 let turnManager: TurnManager;
 
 async function init() {
-    const countries = await getCountries();
-    turnManager = new TurnManager([...countries], market)
+    try {
+        const countries = await getCountries();
+        turnManager = new TurnManager([...countries], market)
+        logger.info('[SIMULATION] Initialized turn manager successfully');
+    } catch (error) {
+        logger.error(`[SIMULATION] Failed to initialize: ${error}`);
+    }
 }
 
 init();
 
 router.get('/', async (req, res) => {
+    try {
+        if (!turnManager) await init();
 
-    if (!turnManager) await init();
+        if (!turnManager) {
+            res.status(500).send('Turn manager is not initialized');
+            return;
+        }
 
-    turnManager.performTurn()
+        const events = turnManager.performTurn(); 
 
-    res.send(JSON.stringify(market.offers, null, 2))
-})
+        try {
+            await postEvents(events);
+        } catch (error) {
+            logger.warn(`[EVENT_LOGGING] Failed to post events: ${error}`);
+        }
 
-module.exports = router
+        res.json(market.offers);
+
+    } catch (error) {
+        logger.error(`[SIMULATION_ROUTE] Unexpected error: ${error}`);
+        res.status(500).send('An error occurred while processing the turn');
+    }
+});
+
+export default router

@@ -17,6 +17,7 @@ class TradeOffer {
     public ttl: number = 3;
     public createdAt?: number;
     public readonly id: number;
+    public readonly resource = 'oil'
 
     private static _idCounter = 0;
 

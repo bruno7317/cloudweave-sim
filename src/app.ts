@@ -1,6 +1,6 @@
-const express = require('express')
-const cors = require('cors')
-const simulationRoute = require('./routes/simulation')
+import express from 'express'
+import cors from 'cors'
+import simulationRoute from './routes/simulation'
 
 const app = express()
 app.use(cors({origin: '*'}))
